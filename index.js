@@ -324,12 +324,6 @@ function toggleNightMode(button) {
     document.getElementById('toplevel').classList.toggle('nightmode');
 }
 
-function toggleReadMode(button) {
-    button.classList.toggle('selected');
-    document.getElementById('out').classList.toggle('focused');
-    document.getElementById('in').classList.toggle('hidden');
-}
-
 function toggleSpellCheck(button) {
     button.classList.toggle('selected');
     document.body.classList.toggle('no-spellcheck');
@@ -347,9 +341,6 @@ function updateHash() {
 
 function processQueryParams() {
     var params = window.location.search.split('?')[1];
-    if (window.location.hash) {
-        document.getElementById('readbutton').click(); // Show reading view
-    }
     if (params) {
         var obj = {};
         params.split('&').forEach(function(elem) {
