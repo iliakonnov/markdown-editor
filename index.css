@@ -12,7 +12,7 @@
      top: 40px;
      left: 0;
      bottom: 0;
-     width: 50%;
+     width: calc(100% - 21cm - 35px);
      height: auto;
      overflow: auto;
      font-size: 12px;
@@ -38,7 +38,7 @@
      position: fixed;
      top: 40px;
      right: 0;
-     left: 50%;
+     width: 21cm;
      bottom: 0;
      overflow: auto;
      padding: 10px;

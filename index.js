@@ -24,9 +24,11 @@ var md = markdownit({
                 } catch (e) {}
             }
             return '';
-        }
+        },
     })
     .use(markdownitFootnote);
+md.normalizeLink = url => url;
+md.validateLink = () => true;
 
 var hashto;
 
@@ -75,31 +77,48 @@ var render_tasklist = function(str){
     return str
 }
 
+let renderTimer = null;
+let old = null;
+
 function setOutput(val) {
-    val = val.replace(/<equation>((.*?\n)*?.*?)<\/equation>/ig, function(a, b) {
-        return '<img src="http://latex.codecogs.com/png.latex?' + encodeURIComponent(b) + '" />';
-    });
+    out.style.opacity = 0.7;
+    if (renderTimer !== null) clearTimeout(renderTimer);
+    renderTimer = setTimeout(function() {
+        val = val.replace(/<equation>((.*?\n)*?.*?)<\/equation>/ig, function(a, b) {
+            return '<img src="http://latex.codecogs.com/png.latex?' + encodeURIComponent(b) + '" />';
+        });
 
-    var out = document.getElementById('out');
-    var old = out.cloneNode(true);
-    out.innerHTML = md.render(val);
-    emojify.run(out);
-    console.log(out.innerHTML);
-    // Checks if there are any task-list present in out.innerHTML
-    out.innerHTML = render_tasklist(out.innerHTML);
+        var out = document.getElementById('out');
+        if (old === null) old = out.cloneNode(true);
+        out.innerHTML = md.render(val);
+        renderMath(out);
+        emojify.run(out);
+        //console.log(out.innerHTML);
+        // Checks if there are any task-list present in out.innerHTML
+        out.innerHTML = render_tasklist(out.innerHTML);
 
-    var allold = old.getElementsByTagName("*");
-    if (allold === undefined) return;
-
-    var allnew = out.getElementsByTagName("*");
-    if (allnew === undefined) return;
-
-    for (var i = 0, max = Math.min(allold.length, allnew.length); i < max; i++) {
-        if (!allold[i].isEqualNode(allnew[i])) {
-            out.scrollTop = allnew[i].offsetTop;
-            return;
+        for (let img of out.querySelectorAll("img")) {
+            if (img.alt && img.alt[0] === '!') {
+                img.setAttribute("style", img.alt.slice(1));
+            }
         }
-    }
+	
+	out.style.opacity = 1;
+
+        var allold = old.getElementsByTagName("*");
+        if (allold === undefined) return;
+
+        var allnew = out.getElementsByTagName("*");
+        if (allnew === undefined) return;
+
+        for (var i = 0, max = Math.min(allold.length, allnew.length); i < max; i++) {
+            if (!allold[i].isEqualNode(allnew[i])) {
+                out.scrollTop = allnew[i].offsetTop;
+                return;
+            }
+        }
+        old = out.cloneNode(true);
+    }, 1500);
 }
 
 CodeMirrorSpellChecker({
@@ -115,7 +134,11 @@ var editor = CodeMirror.fromTextArea(document.getElementById('code'), {
     theme: 'base16-light',
     extraKeys: {
         "Enter": "newlineAndIndentContinueMarkdownList"
-    }
+    },
+    lineNumbers: true,
+    lineWrapping: true,
+    foldGutter: true,
+    gutters: ["CodeMirror-linenumbers", "CodeMirror-foldgutter"],
 });
 
 editor.on('change', update);
@@ -148,6 +171,14 @@ editor.addKeyMap({
     // keyboard shortcut
     'Ctrl-L': function(cm) {
         cm.replaceSelection(selectionChanger(cm.getSelection(),'<kbd>','</kbd>'));
+    },
+    // paste svg
+    'Ctrl-E': function(cm) {
+        pasteSvg(cm);
+    },
+    // remove svg
+    'Ctrl-R': function(cm) {
+        removeSvg(cm);
     }
 });
 
@@ -248,6 +279,10 @@ document.addEventListener('keydown', function(e) {
         return false;
     }
 
+    if (e.keyCode === 13 && e.ctrlKey) {
+        renderMath(out);
+    }
+
     if (e.keyCode === 27 && menuVisible) {
         hideMenu();
 
@@ -261,8 +296,9 @@ function clearEditor() {
 }
 
 function saveInBrowser() {
+    let key = `content${window.location.search}`
     var text = editor.getValue();
-    if (localStorage.getItem('content')) {
+    if (localStorage.getItem(key)) {
         swal({
                 title: "Existing Data Detected",
                 text: "You will overwrite the data previously saved!",
@@ -273,11 +309,11 @@ function saveInBrowser() {
                 closeOnConfirm: false
             },
             function() {
-                localStorage.setItem('content', text);
+                localStorage.setItem(key, text);
                 swal("Saved", "Your Document has been saved.", "success");
             });
     } else {
-        localStorage.setItem('content', text);
+        localStorage.setItem(key, text);
         swal("Saved", "Your Document has been saved.", "success");
     }
     console.log("Saved");
@@ -346,8 +382,11 @@ function start() {
                 ))
             );
         }
-    } else if (localStorage.getItem('content')) {
-        editor.setValue(localStorage.getItem('content'));
+    } else {
+        let saved = localStorage.getItem(`content${window.location.search}`)
+        if (saved) {
+            editor.setValue(saved);
+        }
     }
     update(editor);
     editor.focus();
@@ -363,5 +402,59 @@ window.addEventListener("beforeunload", function (e) {
     (e || window.event).returnValue = confirmationMessage; //Gecko + IE
     return confirmationMessage; //Gecko + Webkit, Safari, Chrome etc.
 });
+
+function makeid(length) {
+    var result           = [];
+    var characters       = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    var charactersLength = characters.length;
+    for ( var i = 0; i < length; i++ ) {
+      result.push(characters.charAt(Math.floor(Math.random() * 
+ charactersLength)));
+   }
+   return result.join('');
+}
+
+function b64EncodeUnicode(str) {
+    // first we use encodeURIComponent to get percent-encoded UTF-8,
+    // then we convert the percent encodings into raw bytes which
+    // can be fed into btoa.
+    return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g,
+        function toSolidBytes(match, p1) {
+            return String.fromCharCode('0x' + p1);
+    }));
+}
+
+async function pasteSvg(cm) {
+    let content = await navigator.clipboard.readText();
+    let doc = new DOMParser().parseFromString(content, "image/svg+xml");
+    let elem = doc.children[0];
+    document.body.appendChild(elem);
+    let bbox = elem.getBBox();
+    let viewBox = [bbox.x, bbox.y, bbox.width, bbox.height].join(" ");
+    elem.setAttribute("viewBox", viewBox);
+    let svg = new XMLSerializer().serializeToString(elem);
+    document.body.removeChild(elem);
+    let encoded = "data:image/svg+xml;base64," + b64EncodeUnicode(svg);
+    let key = makeid(10);
+    cm.replaceSelection(`![${cm.getSelection()}][${key}]`);
+    editor.replaceRange(`\n[${key}]: ${encoded}`, {line: editor.lastLine()+1, ch:0});
+}
+
+function removeSvg(cm) {
+    let sel = cm.getSelection();
+    let match = sel.match(/^!\[.*\]\[(.*)\]$/);
+    if (!match) return;
+    let key = match[1];
+    let found = null;
+    editor.eachLine(line => {
+        if (line.text.startsWith(`[${key}]:`)) {
+            found = editor.getLineNumber(line);
+        }
+    });
+    if (found) {
+        editor.replaceRange('', {line: found, ch: 0}, {line: found+1, ch:0});
+        cm.replaceSelection("");
+    }
+}
 
 start();
