@@ -1,4 +1,5 @@
 'use strict';
+// vim: et:ts=4:sw=4
 document.getElementsByTagName("head")[0].insertAdjacentHTML(
     "beforeend",
     `
@@ -120,28 +121,37 @@ function renderMath(root) {
     let elems = root.querySelectorAll("pre,code");
     for (let el of elems) {
         if (!el.parentNode) continue;
-        let display = el.classList.contains("language-math") || el.classList.contains("lang-math");
-
         let prev = el.previousSibling;
         let next = el.nextSibling;
-        let inline = (
-            next &&
-            next.nodeName === "#text" &&
-            next.textContent.startsWith("$") &&
-            prev &&
-            prev.nodeName === "#text" &&
-            prev.textContent.endsWith("$")
+
+        let prevText = prev && prev.nodeName === "#text" ? prev.textContent : "";
+        let nextText = next && next.nodeName === "#text" ? next.textContent : "";
+
+        let realDisplay = (
+            el.classList.contains("language-math") ||
+            el.classList.contains("lang-math")
+        );
+        let inlineDisplay = (
+            nextText.startsWith("$$") &&
+            prevText.endsWith("$$")
+        );
+        let inline = !inlineDisplay && (
+            nextText.startsWith("$") &&
+            prevText.endsWith("$")
         );
 
-        let is_math = display || inline;
+        let is_math = realDisplay || inlineDisplay || inline;
         if (!is_math) continue;
 
-        if (display && el.parentElement.tagName.toUpperCase() == "PRE") {
+        if (realDisplay && el.parentElement.tagName.toUpperCase() == "PRE") {
             el = el.parentElement;
         }
 
         let latex = el.textContent;
-        let rendered = doKaTeX(el.textContent, display);
+        if (inlineDisplay) {
+            latex = '\\displaystyle ' + latex;
+        }
+        let rendered = doKaTeX(latex, realDisplay);
 
         if (!rendered.ok) {
             console.log(el);
@@ -149,8 +159,8 @@ function renderMath(root) {
             el.textContent = rendered.text;
             continue;
         }
-        let katexElement = document.createElement(display ? "div" : "span");
-        katexElement.setAttribute("class", (display ? "equation" : "inline-equation") + " mathMagic");
+        let katexElement = document.createElement(realDisplay ? "div" : "span");
+        katexElement.setAttribute("class", (realDisplay ? "equation" : "inline-equation") + " mathMagic");
         katexElement.innerHTML = rendered.text;
 
         if (!el.parentNode) continue;
@@ -158,6 +168,9 @@ function renderMath(root) {
         if (inline) {
             next.textContent = next.textContent.substr(1);
             prev.textContent = prev.textContent.substr(0, prev.textContent.length - 1);
+        } else if (inlineDisplay) {
+            next.textContent = next.textContent.substr(2);
+            prev.textContent = prev.textContent.substr(0, prev.textContent.length - 2);
         }
     }
     var t1 = performance.now()
