@@ -84,10 +84,6 @@ function setOutput(val) {
     out.style.opacity = 0.7;
     if (renderTimer !== null) clearTimeout(renderTimer);
     renderTimer = setTimeout(function() {
-        val = val.replace(/<equation>((.*?\n)*?.*?)<\/equation>/ig, function(a, b) {
-            return '<img src="http://latex.codecogs.com/png.latex?' + encodeURIComponent(b) + '" />';
-        });
-
         var out = document.getElementById('out');
         if (old === null) old = out.cloneNode(true);
         out.innerHTML = md.render(val);
@@ -121,13 +117,8 @@ function setOutput(val) {
     }, 1500);
 }
 
-CodeMirrorSpellChecker({
-    codeMirrorInstance: CodeMirror,
-});
-
 var editor = CodeMirror.fromTextArea(document.getElementById('code'), {
-    mode: "spell-checker",
-    backdrop: "gfm",
+    mode: "gfm",
     lineNumbers: false,
     matchBrackets: true,
     lineWrapping: true,
@@ -322,11 +313,6 @@ function saveInBrowser() {
 function toggleNightMode(button) {
     button.classList.toggle('selected');
     document.getElementById('toplevel').classList.toggle('nightmode');
-}
-
-function toggleSpellCheck(button) {
-    button.classList.toggle('selected');
-    document.body.classList.toggle('no-spellcheck');
 }
 
 function updateHash() {
